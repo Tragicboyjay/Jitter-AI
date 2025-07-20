@@ -14,7 +14,8 @@ from core.agent import get_ai_response
 from parsers.parse_being_json import load_being_json
 from tasks.twitter import tweet_generator
 from utils.print_details import print_being_details
-from rag.rag_system import get_index_model, get_rag_context
+from rag.rag_system import ingest_data, search_rag
+from memory.sqlite_setup import setup_database
 
 load_dotenv()
 
@@ -64,15 +65,18 @@ async def lifespan(app: FastAPI):
     # -- Startup --
     print("INFO:     Starting up application...")
 
+    # Ensure DB tables exist before any RAG/model logic
+    setup_database()
+
     # Load resources once
     being_data = load_being_json(being_name=_being_name_from_cli)
     print_being_details(being_data)
 
-    model_index_data = get_index_model(being_data)
-    
-    # Store resources in the app state for access elsewhere
+    # Ingest RAG data (process new/changed files and update index/db)
+    ingest_data()
+
+    # Store being in the app state for access elsewhere
     app.state.being = being_data
-    app.state.model_index = model_index_data
     
     # Create and start background tasks
     tasks = []
@@ -100,9 +104,7 @@ def get_being():
     """Dependency to get the 'being' object from app state."""
     return server_app.state.being
 
-def get_model_index():
-    """Dependency to get the 'model_index' object from app state."""
-    return server_app.state.model_index
+
 
 # --- API Endpoints ---
 
@@ -122,23 +124,22 @@ async def get_being_details(being: dict = Depends(get_being)):
     """Returns being details using dependency injection."""
     return being
 
+
 @server_app.post("/message")
 async def get_message_response(
     message: Message,
-    being: dict = Depends(get_being),
-    model_index: tuple = Depends(get_model_index)
+    being: dict = Depends(get_being)
 ):
     """Gets an AI response using dependency injection for resources."""
     if not message.content:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
-        rag_context = get_rag_context(being, model_index[0], model_index[1], message.content, top_k=3)
+        rag_context = search_rag(message.content, top_k=3)
         response = get_ai_response(being, rag_context, message.content)
         if not response:
             raise ValueError("AI response was empty")
         return {"response": response}
-    
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:

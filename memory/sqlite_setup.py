@@ -11,6 +11,7 @@ def setup_database(db_name="agent_memory.db"):
 
         print(f"Successfully connected to database: {db_name}")
 
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,6 +20,21 @@ def setup_database(db_name="agent_memory.db"):
                 role TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS processed_files (
+                file_path TEXT PRIMARY KEY,
+                file_hash TEXT NOT NULL
+            );
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS vector_chunks (
+                id INTEGER PRIMARY KEY,
+                file_path TEXT NOT NULL,
+                chunk_text TEXT NOT NULL
+            );
         ''')
 
         # Commit the changes to the database

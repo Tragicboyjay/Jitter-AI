@@ -3,3 +3,6 @@
 __pycache__
 agent_memory.db
 files/
+clear_db.py
+rag_index.faiss
+rag_test.txt
