@@ -55,7 +55,7 @@ def ingest_data():
         return
 
     files_to_process = [os.path.join(files_dir, f) for f in os.listdir(files_dir)]
-    print(f"[ingest_data] Files found: {[os.path.basename(f) for f in files_to_process]}")
+    print(f"\n[ingest_data] Files found: {[os.path.basename(f) for f in files_to_process]}\n")
     new_vectors_added = False
 
     # --- Cleanup: Remove DB entries for files no longer present ---
@@ -65,7 +65,7 @@ def ingest_data():
     removed_files = db_file_paths - current_file_paths
     if removed_files:
         removed_files_info = [f"{os.path.basename(f)} ({os.path.splitext(f)[1]})" for f in removed_files]
-        print(f"[ingest_data] Removing DB entries for deleted files: {removed_files_info}")
+        print(f"\n[ingest_data] Removing DB entries for deleted files: {removed_files_info}\n")
         for file_path in removed_files:
             cursor.execute("DELETE FROM vector_chunks WHERE file_path = ?", (file_path,))
             cursor.execute("DELETE FROM processed_files WHERE file_path = ?", (file_path,))
