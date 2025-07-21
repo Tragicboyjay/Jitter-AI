@@ -1,0 +1,33 @@
+
+# DEFAULTS
+DEFAULT_AGENT_MODEL_PROVIDER = "google"  # Default model provider
+
+# OpenRouter 
+OPENROUTER_API_KEY= # Your OpenRouter API key
+OPENROUTER_MODEL_ID=moonshotai/kimi-k2:free # Default model ID "moonshotai/kimi-k2:free"
+
+# Google Cloud
+GOOGLE_API_KEY= # Your Google API key
+GOOGLE_MODEL_ID=gemini-2.0-flash # Default is gemini-2.0-flash
+
+# Tavily
+TAVILY_API_KEY= # Your Tavily API key
+
+# Twitter Configuration
+Generate_Tweet=false # Set to True to enable tweet generation
+Tweet_Interval=2 # Interval in minutes for tweet generation
+TWITTER_USERNAME= # Your Twitter username
+TWITTER_PASSWORD= # Your Twitter password
+Twitter_EMAIL= # Your Twitter email
+
+# Agent Configuration
+AGENT_ALIVE=True  # Set to True to keep the agent alive
+MAX_ITERATIONS=5  # Maximum iterations for the agent to run
+
+# File RAG configuration
+USE_FILE_RAG=True  # Set to True to enable file-based RAG
+MAX_TOKENS_PER_CHUNK=256 # Maximum tokens per chunk for file RAG. Default is 256
+
+# Server configuration
+HOST="0.0.0.0"
+PORT=8000 # Default port for the FastAPI server

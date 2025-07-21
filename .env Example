@@ -1,7 +1,0 @@
-# OpenRouter 
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL_ID= # Default model ID "moonshotai/kimi-k2:free"
-
-# Google Cloud
-GOOGLE_API_KEY=
-GOOGLE_MODEL_ID= # default is gemini-1.5 flash
