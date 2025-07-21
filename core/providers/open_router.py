@@ -25,30 +25,35 @@ def open_router_provider(system_prompt, message, rag, previous_messages=[]):
         raise ValueError("Model ID is not specified in environment variables or defaults")
     
     try:
+        payload = {
+            "model": model,
+            "messages": messages,
+        }
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
-            data=json.dumps({
-                "model": model,
-                "messages": messages,
-            })
+            data=json.dumps(payload)
         )
-        
-        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        try:
+            response.raise_for_status()  # Raise an exception for HTTP errors
+        except requests.exceptions.HTTPError as e:
+            raise ValueError(f"Failed to get response from OpenRouter: {str(e)}")
+
         response_data = response.json()
-        
+
         if "error" in response_data:
             raise ValueError(f"API Error: {response_data['error']}")
-            
+
         content = response_data.get("choices", [{}])[0].get("message", {}).get("content")
         if not content:
             raise ValueError(f"Invalid API Response: {response_data}")
-            
+
         return content
-        
+
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {str(e)}")
         raise ValueError(f"Failed to get response from OpenRouter: {str(e)}")

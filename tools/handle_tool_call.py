@@ -1,49 +1,56 @@
 import re
-import ast # Keep ast for literal_eval for this specific format
+import ast
 import sys
 import os
 
-# Adjust sys.path.append if necessary based on your project structure and how you run the script
-# If you run `python server.py` from `agent_light/`, then `lightai/` is on the path.
-# If you run from `agent_light/lightai/tools/`, then `../` is needed for `tool_registry`.
-# sys.path.append(os.path.join(os.path.dirname(__file__), '..')) # Keeping this as per your original file structure
-
 # Import get_tool_function to retrieve the actual callable tool function
-from tools.tool_registry import get_tool_function 
+from tools.tool_registry import get_tool_function
 
 # Regex to match FUNCTION: <tool_name> PARAMS: { ... }
-TOOL_CALL_REGEX = r"FUNCTION:\s*(\w+)\s*PARAMS:\s*(\{.*\})"
+TOOL_CALL_REGEX = r"FUNCTION:\s*(\w+)\s*PARAMS:\s*(\{.*?\})"
 
-
-def is_tool_call(message: str) -> bool:
+def is_tool_call(message: str):
     """
-    Returns True if the message contains a valid tool call in the FUNCTION: PARAMS: format, else False.
+    Returns a list of tool calls if the message contains valid tool calls, else False.
+    This supports both single and multiple tool calls in one message.
+    
+    Returns:
+    - List of tuples [(tool_name, params), ...] if tool calls found
+    - False if no tool calls found
     """
-    match = re.search(TOOL_CALL_REGEX, message)
-    return bool(match)
-
+    matches = re.findall(TOOL_CALL_REGEX, message, re.DOTALL)
+    if not matches:
+        return False
+    
+    tool_calls = []
+    for tool_name, params_str in matches:
+        try:
+            # Safely evaluate the params dict string
+            params = ast.literal_eval(params_str)
+            # Ensure params is actually a dictionary
+            if not isinstance(params, dict):
+                print(f"[WARNING] Parsed parameters for '{tool_name}' are not a dictionary: {params}")
+                continue
+            tool_calls.append((tool_name, params))
+        except Exception as e:
+            print(f"[ERROR] Failed to parse tool call parameters for '{tool_name}': {e}")
+            continue
+    
+    return tool_calls if tool_calls else False
 
 def parse_tool_call(message: str):
     """
-    Checks if a tool call is present in the message and extracts tool name and params.
+    LEGACY FUNCTION: Maintains backward compatibility.
+    Returns the FIRST tool call found in the message.
     Returns (tool_name, params_dict) or (None, None) if not found.
+    
+    This function is kept for backward compatibility with existing code.
+    For new implementations, use is_tool_call() directly.
     """
-    match = re.search(TOOL_CALL_REGEX, message)
-    if not match:
-        return None, None
-    tool_name = match.group(1)
-    params_str = match.group(2)
-    try:
-        # Safely evaluate the params dict string
-        params = ast.literal_eval(params_str)
-        # Ensure params is actually a dictionary, as literal_eval can parse other types
-        if not isinstance(params, dict):
-            raise ValueError("Parsed parameters are not a dictionary.")
-    except Exception as e:
-        print(f"[ERROR] Failed to parse tool call parameters string '{params_str}': {e}")
-        return None, None
-    return tool_name, params
-
+    tool_calls = is_tool_call(message)
+    if tool_calls:
+        return tool_calls[0]  # Return first tool call
+    return None, None
 
 def run_tool(tool_name: str, params: dict):
     """
@@ -51,10 +58,10 @@ def run_tool(tool_name: str, params: dict):
     """
     # Use get_tool_function from tool_registry to get the actual callable function
     tool_function = get_tool_function(tool_name)
-
+    
     if tool_function is None:
         return f"Tool '{tool_name}' not found in registry or is not a callable function."
-
+    
     try:
         # Call the actual Python function with unpacked parameters
         result = tool_function(**params)
@@ -68,3 +75,19 @@ def run_tool(tool_name: str, params: dict):
         # Catch any other unexpected errors during tool execution
         print(f"[ERROR] An unexpected error occurred while running tool '{tool_name}': {e}")
         return f"An unexpected error occurred while running tool '{tool_name}': {e}"
+
+def run_tools_batch(tool_calls):
+    """
+    NEW FUNCTION: Executes multiple tools in parallel (conceptually).
+    
+    Args:
+        tool_calls: List of tuples [(tool_name, params), ...]
+    
+    Returns:
+        List of results corresponding to each tool call
+    """
+    results = []
+    for tool_name, params in tool_calls:
+        result = run_tool(tool_name, params)
+        results.append(result)
+    return results

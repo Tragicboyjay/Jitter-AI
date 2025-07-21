@@ -14,9 +14,9 @@ subprocess.run([pip_executable, "install", "--upgrade", "pip"])
 subprocess.run([pip_executable, "install", "-r", "requirements.txt"])
 
 print("\n✅ Setup complete!")
-print("To activate the environment:")
+print("To activate the environment run this command:")
 if os.name == "nt":
-    print("    venv\\Scripts\\activate")
+    print("command: venv\\Scripts\\activate")
 else:
-    print("    source venv/bin/activate")
+    print("command: source venv/bin/activate")
     

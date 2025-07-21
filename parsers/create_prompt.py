@@ -205,36 +205,45 @@ def create_system_prompt(rag, being):
         
 
     prompt += (
-
         "\n=== TOOL USAGE INSTRUCTIONS ===\n"
-
         "WORKFLOW:\n"
-
-        "1. If a user question requires a tool, call it using this format:\n"
-
+        "1. PLANNING: When a user question requires tools, think about ALL tools needed and call them together in ONE response.\n"
+        "   - For tasks requiring multiple similar operations (like 'roll 3 dice'), make multiple tool calls at once\n"
+        "   - For complex tasks, identify all required tools and call them simultaneously\n\n"
+        
+        "2. TOOL CALL FORMAT (use EXACT format, no code blocks):\n"
         "   FUNCTION: <tool_name> PARAMS: { 'param1': 'value1', 'param2': 'value2' }\n"
-
-        "   Example: FUNCTION: weather PARAMS: { 'location': 'New York' }\n\n"
-
+        "   Example: FUNCTION: weather PARAMS: { 'location': 'New York' }\n"
+        "   IMPORTANT: Do NOT wrap tool calls in code blocks or backticks\n\n"
         
-
-        "2. When you receive tool results, IMMEDIATELY use them to answer the user's ORIGINAL question.\n"
-
-        "   - The tool result is data for YOU to use, not something to acknowledge or comment on\n"
-
-        "   - Integrate the information naturally into your character's response\n"
-
-        "   - Do NOT say things like 'thanks for the data' or 'I already knew that'\n"
-
+        "   MULTIPLE TOOLS (preferred when applicable):\n"
+        "   FUNCTION: generate_random_number PARAMS: { 'min_val': 1, 'max_val': 6 }\n"
+        "   FUNCTION: generate_random_number PARAMS: { 'min_val': 1, 'max_val': 6 }\n"
+        "   FUNCTION: generate_random_number PARAMS: { 'min_val': 1, 'max_val': 6 }\n\n"
+        
+        "3. AFTER RECEIVING TOOL RESULTS:\n"
+        "   - Use ALL results to answer the user's ORIGINAL question comprehensively\n"
+        "   - The tool results are data for YOU to use, not something to acknowledge\n"
+        "   - Integrate information naturally into your character's response\n"
+        "   - Do NOT say 'thanks for the data' or 'I already knew that'\n"
         "   - Focus on answering what the user actually asked\n\n"
-
         
-
-        "3. CRITICAL: Tool results are meant to help you provide accurate, helpful answers.\n"
-
-        "   Use them to inform your response, don't treat them as conversation.\n"
-
+        "4. EXAMPLES:\n"
+        "   User: 'Roll 3 dice'\n"
+        "   You: Make 3 generate_random_number calls at once\n"
+        "   Results: [4, 1, 6]\n"
+        "   You: 'You rolled three dice and got: 4, 1, and 6!'\n\n"
+        
+        "   User: 'What's the weather in Toronto and Montreal?'\n"
+        "   You: Make 2 weather calls at once\n"
+        "   Results: [Toronto data, Montreal data]\n"
+        "   You: Synthesize both weather reports\n\n"
+        
+        "5. CRITICAL: Maximize efficiency by calling multiple tools simultaneously when the task requires it.\n"
+        "   This provides faster, more comprehensive responses to users.\n"
     )
+
+
 
 
 
