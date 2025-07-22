@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from core.agent import get_ai_response
 from parsers.parse_being_json import load_being_json
 from tasks.live import agent_live
-from tasks.twitter import tweet_generator
 from utils.print_details import print_being_details
 from rag.rag_system import ingest_data, search_rag
 from memory.sqlite_setup import setup_database
@@ -84,10 +83,6 @@ async def lifespan(app: FastAPI):
     # Create and start background tasks
     tasks = []
     
-    if GENERATE_TWEET:
-        print(f"INFO:     Starting tweet generator. Interval: {TWEET_INTERVAL} minute(s).")
-        tasks.append(asyncio.create_task(tweet_generator(app)))
-
     if AGENT_ALIVE:
         tasks.append(asyncio.create_task(agent_live(app)))
 

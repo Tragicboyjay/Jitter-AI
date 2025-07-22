@@ -8,3 +8,4 @@ rag/rag_test.txt
 rag/.chromadb
 rag/processed_files.txt
 tools/deck_of_cards.py
+tasks/twitter.py
