@@ -89,9 +89,4 @@ Jitter is a simple, modular framework for building conversational AI agents with
 - Supports RAG from `.txt`, `.pdf`, `.html`, `.csv`, `.md` files
 - Multi-provider: Google Gemini, OpenRouter, and more
 - Add custom tools/functions for your agent to use
-
----
-
-## License
-
-MIT
+  
