@@ -1,141 +1,135 @@
 import os
-import sqlite3
+import re
 import hashlib
-import numpy as np
+from typing import List
 from sentence_transformers import SentenceTransformer
-import faiss
+from chromadb import PersistentClient
+from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
 from rag.rag_file_parser import text_file_rag, pdf_file_rag, html_file_rag, csv_file_rag, md_file_rag
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "memory", "agent_memory.db")
-INDEX_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rag_index.faiss")
-MODEL_NAME = 'all-MiniLM-L6-v2'
+# ---------------------------
+# Config
+# ---------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FILES_DIR = os.path.join(BASE_DIR, 'files')
+HASH_STORE = os.path.join(BASE_DIR, 'processed_files.txt')
+CHROMA_DIR = os.path.join(BASE_DIR, ".chromadb")
 
 print("[RAG] Loading embedding model...")
-model = SentenceTransformer(MODEL_NAME)
-DIM = model.get_sentence_embedding_dimension()
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+embedding_fn = SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL_NAME)
 
-# SQLite connection and table creation will be handled by setup_database in app lifecycle
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
+print("[RAG] Initializing Chroma client...")
+client = PersistentClient(path=CHROMA_DIR)
+collection = client.get_or_create_collection(name="rag_chunks", embedding_function=embedding_fn)
 
-# Load or create FAISS index
-if os.path.exists(INDEX_PATH):
-    print("[RAG] Loading existing FAISS index.")
-    index = faiss.read_index(INDEX_PATH)
-else:
-    print("[RAG] No FAISS index found, creating a new one.")
-    index = faiss.IndexIDMap(faiss.IndexFlatL2(DIM))
+# ---------------------------
+# Utility Functions
+# ---------------------------
 
 def hash_file(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
 
+def make_chunk_id(source_id, chunk):
+    return hashlib.sha256(f"{source_id}-{chunk}".encode()).hexdigest()
+
 def get_chunks_from_file(file_path):
     if file_path.endswith('.txt'):
-        chunks = text_file_rag(file_path)
+        return text_file_rag(file_path)
     elif file_path.endswith('.pdf'):
-        chunks = pdf_file_rag(file_path)
+        return pdf_file_rag(file_path)
     elif file_path.endswith('.html') or file_path.endswith('.htm'):
-        chunks = html_file_rag(file_path)
+        return html_file_rag(file_path)
     elif file_path.endswith('.csv'):
-        chunks = csv_file_rag(file_path)
+        return csv_file_rag(file_path)
     elif file_path.endswith('.md'):
-        chunks = md_file_rag(file_path)
+        return md_file_rag(file_path)
     else:
         print(f"[get_chunks_from_file] Unsupported file type: {file_path}")
         return []
-    print(f"[get_chunks_from_file] {file_path} -> {len(chunks)} chunks")
-    return chunks
 
-def ingest_data():
-    files_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'files')
-    if not os.path.exists(files_dir):
-        print(f"Directory '{files_dir}' does not exist.")
+def load_processed_hashes():
+    if not os.path.exists(HASH_STORE):
+        return {}
+    with open(HASH_STORE, "r") as f:
+        lines = f.read().splitlines()
+    return dict(line.split(":", 1) for line in lines)
+
+def save_processed_hashes(file_hashes):
+    with open(HASH_STORE, "w") as f:
+        for path, file_hash in file_hashes.items():
+            f.write(f"{path}:{file_hash}\n")
+
+# ---------------------------
+# Add Chunks Manually
+# ---------------------------
+
+def add_chunks_to_db(chunks: List[str], source_id: str = "manual"):
+    if not chunks:
+        print("[add_chunks_to_db] No chunks provided.")
         return
 
-    files_to_process = [os.path.join(files_dir, f) for f in os.listdir(files_dir)]
-    print(f"\n[ingest_data] Files found: {[os.path.basename(f) for f in files_to_process]}\n")
-    new_vectors_added = False
+    ids = [make_chunk_id(source_id, chunk) for chunk in chunks]
+    metadatas = [{"source": source_id} for _ in chunks]
 
-    # --- Cleanup: Remove DB entries for files no longer present ---
-    cursor.execute("SELECT DISTINCT file_path FROM vector_chunks")
-    db_file_paths = set(row[0] for row in cursor.fetchall())
-    current_file_paths = set(files_to_process)
-    removed_files = db_file_paths - current_file_paths
-    if removed_files:
-        removed_files_info = [f"{os.path.basename(f)} ({os.path.splitext(f)[1]})" for f in removed_files]
-        print(f"\n[ingest_data] Removing DB entries for deleted files: {removed_files_info}\n")
-        for file_path in removed_files:
-            cursor.execute("DELETE FROM vector_chunks WHERE file_path = ?", (file_path,))
-            cursor.execute("DELETE FROM processed_files WHERE file_path = ?", (file_path,))
-        conn.commit()
+    try:
+        collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+        print(f"[add_chunks_to_db] Added {len(chunks)} chunks from '{source_id}' to the collection.")
+    except Exception as e:
+        print(f"[add_chunks_to_db] Error adding chunks: {e}")
+
+# ---------------------------
+# Ingest Files from Folder
+# ---------------------------
+
+def ingest_data():
+    if not os.path.exists(FILES_DIR):
+        print(f"[ingest_data] Directory '{FILES_DIR}' does not exist.")
+        return
+
+    files_to_process = [os.path.join(FILES_DIR, f) for f in os.listdir(FILES_DIR)]
+    print(f"\n[ingest_data] Found files: {[os.path.basename(f) for f in files_to_process]}")
+
+    processed_hashes = load_processed_hashes()
+    updated_hashes = processed_hashes.copy()
 
     for file_path in files_to_process:
         try:
-            current_hash = hash_file(file_path)
-            cursor.execute("SELECT file_hash FROM processed_files WHERE file_path = ?", (file_path,))
-            row = cursor.fetchone()
+            file_hash = hash_file(file_path)
+            if processed_hashes.get(file_path) == file_hash:
+                continue  # Skip unchanged
 
-            if row and row[0] == current_hash:
-                continue  # Skip if file is unchanged
-
-            print(f"Processing new/modified file: {file_path}")
-
+            print(f"[ingest_data] Processing: {file_path}")
             chunks = get_chunks_from_file(file_path)
             if not chunks:
                 continue
 
+            ids = [make_chunk_id(file_path, chunk) for chunk in chunks]
+            metadatas = [{"file_path": file_path} for _ in chunks]
 
-            # Insert each chunk individually, fetch its rowid, and use as FAISS vector ID
-            vector_ids = []
-            valid_chunks = []
-            for chunk in chunks:
-                cursor.execute(
-                    "INSERT INTO vector_chunks (file_path, chunk_text) VALUES (?, ?)",
-                    (file_path, chunk)
-                )
-                rowid = cursor.lastrowid
-                vector_ids.append(rowid)
-                valid_chunks.append(chunk)
-
-            if valid_chunks:
-                embeddings = model.encode(valid_chunks, convert_to_numpy=True).astype('float32')
-                index.add_with_ids(embeddings, np.array(vector_ids))
-                new_vectors_added = True
-
-            cursor.execute(
-                "REPLACE INTO processed_files (file_path, file_hash) VALUES (?, ?)",
-                (file_path, current_hash)
-            )
+            collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+            updated_hashes[file_path] = file_hash
 
         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+            print(f"[ingest_data] Error processing {file_path}: {e}")
 
-    if new_vectors_added:
-        print("Committing changes to database and saving FAISS index...")
-        conn.commit()
-        faiss.write_index(index, INDEX_PATH)
-        print(f"Ingestion complete. Index now contains {index.ntotal} vectors.")
-    else:
-        print("No new file changes detected. System is up to date.")
+    save_processed_hashes(updated_hashes)
+    print(f"[ingest_data] Ingestion complete. Collection now contains {collection.count()} documents.\n")
 
-def search_rag(query: str, top_k: int = 3):
-    if index.ntotal == 0:
-        return "The knowledge base is empty. Please add files to the 'files' directory and run the ingestion process."
+# ---------------------------
+# Search Function
+# ---------------------------
 
-    query_embedding = model.encode([query], convert_to_numpy=True).astype('float32')
-    distances, ids = index.search(query_embedding, top_k)
+def search_rag(query: str, top_k: int = 20):
+    if collection.count() == 0:
+        return "Knowledge base is empty. Add files to the 'files' directory and run ingestion."
 
-    retrieved_chunks = []
-    for i in ids[0]:
-        if i != -1:
-            cursor.execute("SELECT chunk_text FROM vector_chunks WHERE id = ?", (int(i),))
-            result = cursor.fetchone()
-            if result:
-                retrieved_chunks.append(result[0])
+    results = collection.query(query_texts=[query], n_results=top_k)
+    documents = results.get("documents", [[]])[0]
+    if not documents:
+        return "No relevant information found."
 
-    if not retrieved_chunks:
-        return "No relevant information found in the knowledge base."
-
-    return "\n".join(retrieved_chunks)
+    return "\n".join(documents)

@@ -10,7 +10,7 @@ DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_AGENT_MODEL_PROVIDER", "openRouter")
 
 default_being = {
     "modelProvider": DEFAULT_MODEL_PROVIDER,
-    "contextId": "default_assistant",
+    "contextId": "default_assistant2",
     "system": "You are Jitter AI, a concise, clear, and friendly assistant. Answer directly and avoid unnecessary words.",
     "character": {
         "name": "Jitter",
